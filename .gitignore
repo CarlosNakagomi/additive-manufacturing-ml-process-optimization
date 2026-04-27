@@ -1,24 +1,21 @@
 # Python
 __pycache__/
-*.py[cod]
-
-# Virtual environments
+*.pyc
+*.pyo
+*.pyd
 .venv/
 venv/
 env/
+ENV/
 
-# Jupyter
-.ipynb_checkpoints/
+# Streamlit
+.streamlit/secrets.toml
 
-# Secrets
-.env
-*.env
-
-# CatBoost training cache
-catboost_info/
-
-# OS/editor
+# OS / Editor
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
+
+# Logs
+*.log

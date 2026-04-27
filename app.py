@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import re
 from pathlib import Path
 
@@ -54,6 +55,7 @@ PATHS = {
     "metrics": ROOT_DIR / "outputs" / "metrics" / "model_metrics.json",
     "logo": ROOT_DIR / "assets" / "logo.png",
 }
+SHOW_DEBUG = False
 
 
 def inject_theme() -> None:
@@ -89,6 +91,49 @@ label {
     justify-content: center;
     margin-top: 15px;
     margin-bottom: 10px;
+}
+div.stButton > button {
+    width: 100%;
+    min-height: 3rem;
+    font-size: 1.05rem;
+    font-weight: 700;
+    background: linear-gradient(90deg, #2563eb 0%, #1d4ed8 100%);
+    color: #ffffff;
+    border: 1px solid #1e40af;
+    border-radius: 10px;
+    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.35);
+}
+div.stButton > button:hover {
+    background: linear-gradient(90deg, #1d4ed8 0%, #1e3a8a 100%);
+    border-color: #1e3a8a;
+}
+div[data-testid="stExpander"] {
+    border: 1px solid #2b2f36;
+    border-radius: 8px;
+    background-color: #151a21;
+}
+div[data-testid="stExpander"] details {
+    background-color: #151a21;
+    border-radius: 8px;
+}
+div[data-testid="stExpander"] details summary {
+    background-color: #1b2230 !important;
+    color: #e8eefc !important;
+    border-radius: 8px;
+}
+div[data-testid="stExpander"] details summary p,
+div[data-testid="stExpander"] details summary span,
+div[data-testid="stExpander"] details summary div {
+    color: #e8eefc !important;
+}
+div[data-testid="stExpander"] details summary:hover,
+div[data-testid="stExpander"] details summary:focus,
+div[data-testid="stExpander"] details summary:focus-visible,
+div[data-testid="stExpander"] details[open] summary,
+div[data-testid="stExpander"] details[open] summary:hover {
+    background-color: #243047 !important;
+    color: #ffffff !important;
+    outline: none !important;
 }
 </style>
 """,
@@ -226,59 +271,209 @@ def render_importance_bar(feature_names: list[str], importances: np.ndarray, top
     sorted_names = names[idx]
     sorted_values = values[idx]
 
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(8.2, 3.8), dpi=120)
     ax.barh(sorted_names, sorted_values, color="#4c78a8")
     ax.set_xlabel("Relative importance")
     ax.set_ylabel("Feature")
     ax.set_title("Model Feature Importance")
-    fig.tight_layout()
+    fig.tight_layout(pad=1.0)
     st.pyplot(fig, use_container_width=True)
+    plt.close(fig)
 
 
 def render_header() -> None:
-    col_logo, col_title = st.columns([1, 4])
-    with col_logo:
-        if PATHS["logo"].exists():
-            st.image(str(PATHS["logo"]), width=110)
-        else:
-            st.warning("Optional branding asset missing: `assets/logo.png`")
-    with col_title:
-        st.markdown("# NorthStar - Process Advisor")
-        st.markdown("### Laser Powder Bed Fusion (L-PBF) Optimization")
-        st.markdown(
-            "AI-driven guidance for predicting and optimizing print success in L-PBF systems."
-        )
-
-    video_base64 = load_video_base64(PATHS["video"])
-    if video_base64:
-        st.markdown(
-            f"""
+    with st.container():
+        col_left, col_right = st.columns([3, 2], gap="large")
+        with col_left:
+            st.markdown("# NorthStar - Process Advisor")
+            st.markdown("### Laser Powder Bed Fusion (L-PBF) Optimization")
+            st.markdown(
+                "A portfolio demonstration app that uses machine learning to support process parameter "
+                "selection and print success prediction in additive manufacturing."
+            )
+        with col_right:
+            video_base64 = load_video_base64(PATHS["video"])
+            media_col1, media_col2 = st.columns(2, gap="small")
+            with media_col1:
+                if video_base64:
+                    st.markdown(
+                        f"""
 <div class="video-box">
-    <video autoplay loop muted playsinline style="width:350px; border-radius: 12px;">
+    <video autoplay loop muted playsinline style="width:100%; max-width:260px; border-radius: 12px;">
         <source src="data:video/mp4;base64,{video_base64}" type="video/mp4">
     </video>
 </div>
 """,
-            unsafe_allow_html=True,
-        )
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.caption("Video preview unavailable.")
+            with media_col2:
+                if PATHS["logo"].exists():
+                    st.image(str(PATHS["logo"]), width=220)
+                else:
+                    st.caption("Freefuse logo unavailable.")
+
+        card1, card2, card3 = st.columns(3, gap="medium")
+        with card1:
+            st.info("**AI Process Guidance**\n\nExplore viable parameter windows for L-PBF decision support.")
+        with card2:
+            st.info("**Print Success Prediction**\n\nEstimate likelihood of build success from selected inputs.")
+        with card3:
+            st.info("**Optimization Insights**\n\nReview practical trends for improving print outcomes.")
 
 
-def render_project_overview() -> None:
-    st.markdown("## Project Overview")
+def render_dataset_summary() -> None:
+    st.markdown("## Dataset Summary")
     st.markdown(
         """
-L-PBF is an additive manufacturing process that fuses metal powder layer-by-layer using a high-energy laser.
-The process is sensitive to parameter interactions (for example power, scan velocity, and hatch spacing),
-which makes trial-and-error expensive.
-
-NorthStar predicts process success probability from selected machine and material settings.
-Predictions are **decision-support only** and are **not a replacement for laboratory validation**.
+This project uses an L-PBF process dataset designed to simulate realistic additive manufacturing conditions.
+It includes variables such as laser power, scan speed, hatch spacing, layer thickness, energy density,
+material descriptors, and quality indicators.
+The model focuses on predicting build success and supporting process optimization insights.
 """
     )
-    df = load_optional_dataframe(PATHS["processed_data"], "processed dataset")
-    if df is not None:
-        st.markdown("### Processed Dataset Snapshot")
-        st.dataframe(df.head(10), use_container_width=True)
+    processed = load_optional_dataframe(PATHS["processed_data"], "processed dataset")
+    if processed is not None:
+        with st.expander("View compact dataset preview", expanded=False):
+            st.caption(f"Rows: {processed.shape[0]} | Columns: {processed.shape[1]}")
+            st.dataframe(processed.head(8), use_container_width=True)
+
+
+def calculate_energy_density(power: float, velocity: float, hatch_um: float, layer_um: float) -> float:
+    hatch_mm = hatch_um / 1000.0
+    layer_mm = layer_um / 1000.0
+    velocity_mm_s = velocity * 1000.0
+    denominator = velocity_mm_s * hatch_mm * layer_mm
+    if denominator <= 0:
+        return 0.0
+    return float(power / denominator)
+
+
+def build_dynamic_advisor_result(
+    power: float,
+    velocity: float,
+    hatch: float,
+    layer: float,
+    pred: int,
+    prob: float,
+) -> dict:
+    energy_density = calculate_energy_density(power, velocity, hatch, layer)
+    warnings = []
+    suggestions = []
+    outcome = "Success"
+    # Tuned for current UI input ranges and converted units used in calculate_energy_density.
+    lower_threshold = 35.0
+    upper_threshold = 110.0
+
+    if energy_density < lower_threshold:
+        outcome = "Risk of Failure"
+        warnings.append("The selected parameters may not provide enough energy for stable fusion.")
+        suggestions.append("Increase laser power, reduce scan speed, or reduce hatch spacing.")
+    elif energy_density > upper_threshold:
+        outcome = "Risk of Failure"
+        warnings.append(
+            "The selected parameters may introduce excessive energy, increasing overheating or keyholing risk."
+        )
+        suggestions.append("Reduce laser power, increase scan speed, or increase hatch spacing.")
+    else:
+        warnings.append("The selected parameters are within a more stable process window.")
+        suggestions.append("Keep parameters close to this range and validate with controlled test prints.")
+
+    if power >= 280 and velocity <= 0.7:
+        warnings.append("High power combined with low scan speed may increase overheating or keyholing risk.")
+        suggestions.append("Reduce laser power slightly or increase scan speed to avoid excessive heat input.")
+
+    if power <= 140 and velocity >= 1.6:
+        warnings.append("Low power combined with high scan speed may increase under-fusion risk.")
+        suggestions.append("Increase laser power or reduce scan speed to improve melt pool stability.")
+
+    if hatch >= 120:
+        warnings.append("Large hatch spacing may reduce overlap between scan tracks and increase lack-of-fusion risk.")
+        suggestions.append("Reduce hatch spacing to improve scan-track overlap and bonding consistency.")
+
+    if layer >= 80:
+        warnings.append("Higher layer thickness may require more energy input to maintain stable fusion.")
+        suggestions.append("Lower layer thickness or raise effective energy input for improved fusion stability.")
+
+    if outcome == "Risk of Failure":
+        risk_level = "High"
+    elif prob >= 0.78:
+        risk_level = "Low"
+    elif prob >= 0.55:
+        risk_level = "Medium"
+    else:
+        risk_level = "High"
+
+    main_reason = warnings[0] if warnings else "No major rule-based risk was detected from the selected inputs."
+    practical_suggestion = (
+        suggestions[0]
+        if suggestions
+        else "Run a small validation build and adjust one parameter at a time to improve repeatability."
+    )
+    interpretation = (
+        "The selected setup is predicted to have a stronger chance of successful printability."
+        if outcome == "Success"
+        else "The selected setup may require adjustment before physical validation."
+    )
+
+    low_energy_condition = energy_density < lower_threshold or (power <= 150 and velocity >= 1.2)
+    high_energy_condition = energy_density > upper_threshold or (power >= 280 and velocity <= 0.7)
+
+    if low_energy_condition:
+        power_speed_note = (
+            f"Low power combined with high scan speed may reduce fusion stability; current risk is **{risk_level}**."
+        )
+        practical_suggestion = "Increase laser power, reduce scan speed, or reduce hatch spacing."
+    elif high_energy_condition:
+        power_speed_note = (
+            f"High power combined with low scan speed may increase overheating/keyholing risk; current risk is **{risk_level}**."
+        )
+        practical_suggestion = "Reduce laser power, increase scan speed, or increase hatch spacing."
+    else:
+        power_speed_note = (
+            f"The selected power and scan speed are within a more balanced process range; current risk is **{risk_level}**."
+        )
+
+    if hatch >= 120 and layer >= 80:
+        hatch_layer_note = (
+            "Large hatch spacing and high layer thickness can reduce track overlap and increase lack-of-fusion sensitivity."
+        )
+    elif hatch >= 120 or layer >= 80:
+        hatch_layer_note = (
+            f"Hatch `{hatch:.0f} um` and layer `{layer:.0f} um` are relatively aggressive and may increase fusion sensitivity."
+        )
+    else:
+        hatch_layer_note = (
+            f"Hatch `{hatch:.0f} um` and layer `{layer:.0f} um` support stronger overlap and stable fusion consistency."
+        )
+
+    return {
+        "pred": int(pred),
+        "prob": float(prob),
+        "outcome": outcome,
+        "interpretation": interpretation,
+        "energy_density": energy_density,
+        "risk_level": risk_level,
+        "main_reason": main_reason,
+        "practical_adjustment": practical_suggestion,
+        "rule_based_details": warnings,
+        "optimization_insights": {
+            "power_speed_balance": power_speed_note,
+            "hatch_layer_balance": hatch_layer_note,
+            "practical_recommendation": practical_suggestion,
+        },
+        "inputs": {
+            "power": float(power),
+            "velocity": float(velocity),
+            "hatch": float(hatch),
+            "layer": float(layer),
+        },
+    }
+
+
+def get_current_input_signature(inputs: dict[str, float | str]) -> str:
+    return json.dumps(inputs, sort_keys=True, ensure_ascii=True)
 
 
 def render_process_advisor(pipeline) -> None:
@@ -290,40 +485,55 @@ achieve a successful process outcome and reports a success probability.
 """
     )
 
-    col1, col2 = st.columns(2)
+    with st.container():
+        col1, col2 = st.columns(2)
     with col1:
-        power = st.number_input("Power [W]", 50, 500, 180)
+        power = st.number_input("Power [W]", 50, 500, 180, key="power_input")
         explain("Laser energy delivered to the powder bed.")
     with col2:
-        velocity = st.number_input("Velocity [m/s]", 0.1, 3.0, 0.9)
+        velocity = st.number_input("Velocity [m/s]", 0.1, 3.0, 0.9, key="velocity_input")
         explain("Laser scan speed across the powder bed.")
     with col1:
-        hatch = st.number_input("Hatch Spacing [um]", 10, 200, 90)
+        hatch = st.number_input("Hatch Spacing [um]", 10, 200, 90, key="hatch_input")
         explain("Distance between scan tracks.")
     with col2:
-        beam = st.number_input("Beam Diameter [um]", 20, 200, 78)
+        beam = st.number_input("Beam Diameter [um]", 20, 200, 78, key="beam_input")
         explain("Effective beam spot size.")
     with col1:
-        layer = st.number_input("Powder Layer Thickness [um]", 10, 200, 50)
+        layer = st.number_input("Powder Layer Thickness [um]", 10, 200, 50, key="layer_input")
         explain("Thickness of each powder layer.")
     with col2:
-        d90 = st.number_input("d90 [um]", 1, 60, 15)
+        d90 = st.number_input("d90 [um]", 1, 60, 15, key="d90_input")
         explain("Powder particle coarse fraction (90th percentile).")
 
     st.markdown("### Material and Process Settings")
     col1, col2 = st.columns(2)
     with col1:
-        atomosphere = st.selectbox("Atmosphere of Build", ["Argon", "Nitrogen"])
+        atomosphere = st.selectbox("Atmosphere of Build", ["Argon", "Nitrogen"], key="atmosphere_input")
         explain("Protective gas used during printing.")
     with col2:
-        nucleants = st.selectbox("Nucleants", ["N11", "N12", "N13"])
+        nucleants = st.selectbox("Nucleants", ["N11", "N12", "N13"], key="nucleants_input")
         explain("Powder additive to promote solidification.")
     with col1:
-        atom_atm = st.selectbox("Atomization Atmosphere", ["Gas", "Water"])
+        atom_atm = st.selectbox("Atomization Atmosphere", ["Gas", "Water"], key="atomization_input")
         explain("Powder production method.")
     with col2:
-        same_layer = st.selectbox("Same Layer Scanned?", ["0", "1"])
+        same_layer = st.selectbox("Same Layer Scanned?", ["0", "1"], key="same_layer_input")
         explain("Laser rescans same layer.")
+
+    current_inputs = {
+        "power": float(power),
+        "velocity": float(velocity),
+        "hatch": float(hatch),
+        "beam": float(beam),
+        "layer": float(layer),
+        "d90": float(d90),
+        "atmosphere": str(atomosphere),
+        "nucleants": str(nucleants),
+        "atomization": str(atom_atm),
+        "same_layer": str(same_layer),
+    }
+    current_signature = get_current_input_signature(current_inputs)
 
     X = pd.DataFrame(
         [
@@ -350,154 +560,177 @@ achieve a successful process outcome and reports a success probability.
         ]
     )
 
-    if st.button("Predict"):
+    st.markdown("<div style='height: 0.8rem;'></div>", unsafe_allow_html=True)
+    if st.button("Predict / Analyze", key="predict_button", use_container_width=True):
         pred = pipeline.predict(X)[0]
         prob = float(pipeline.predict_proba(X)[0][1])
-
-        st.markdown("### Prediction Result")
-        if pred == 1:
-            st.markdown("<span class='success-badge'>SUCCESS</span>", unsafe_allow_html=True)
-        else:
-            st.markdown("<span class='fail-badge'>FAIL</span>", unsafe_allow_html=True)
-
-        st.markdown(f"**Probability of SUCCESS:** `{prob:.5f}`")
-        st.caption(
-            "Interpretation: this probability ranks expected success likelihood for decision support."
+        st.session_state["last_advisor_result"] = build_dynamic_advisor_result(
+            power=power,
+            velocity=velocity,
+            hatch=hatch,
+            layer=layer,
+            pred=int(pred),
+            prob=prob,
         )
-        st.caption("Always validate recommendations with controlled experiments and lab testing.")
+        st.session_state["last_prediction_signature"] = current_signature
+    st.markdown("<div style='height: 0.6rem;'></div>", unsafe_allow_html=True)
 
-        st.write("---")
-        st.markdown("### Model Feature Importance")
-        st.caption("Top process parameters influencing predicted print success")
+    result = st.session_state.get("last_advisor_result")
+    last_signature = st.session_state.get("last_prediction_signature")
+    is_stale_result = result is not None and last_signature != current_signature
+    if is_stale_result:
+        st.info("Inputs were changed after the last prediction. Click **Predict / Analyze** to refresh recommendations.")
+    st.session_state["prediction_is_fresh"] = bool(result and not is_stale_result)
+
+    if result and not is_stale_result:
+        st.markdown("### Process Advisor Result")
+        selected_cols = st.columns(4)
+        with selected_cols[0]:
+            st.metric("Selected Laser Power [W]", f"{result['inputs']['power']:.0f}")
+        with selected_cols[1]:
+            st.metric("Selected Scan Speed [m/s]", f"{result['inputs']['velocity']:.2f}")
+        with selected_cols[2]:
+            st.metric("Selected Hatch Spacing [um]", f"{result['inputs']['hatch']:.0f}")
+        with selected_cols[3]:
+            st.metric("Selected Layer Thickness [um]", f"{result['inputs']['layer']:.0f}")
+
+        result_cols = st.columns(4)
+        with result_cols[0]:
+            st.metric("Predicted Build Outcome", result["outcome"])
+        with result_cols[1]:
+            st.metric("Success Probability", f"{result['prob']:.3f}")
+        with result_cols[2]:
+            st.metric("Energy Density [J/mm3]", f"{result['energy_density']:.2f}")
+        with result_cols[3]:
+            st.metric("Risk Level", result["risk_level"])
+
+        if result["outcome"] == "Success":
+            st.markdown("<span class='success-badge'>SUCCESS</span>", unsafe_allow_html=True)
+            st.caption(f"Interpretation: {result['interpretation']}")
+        else:
+            st.markdown("<span class='fail-badge'>RISK OF FAILURE</span>", unsafe_allow_html=True)
+            st.caption(f"Interpretation: {result['interpretation']}")
+
+        st.markdown(f"**Main reason:** {result['main_reason']}")
+        st.markdown(f"**Practical parameter adjustment:** {result['practical_adjustment']}")
+        if result["rule_based_details"]:
+            with st.expander("Rule-based explanation details", expanded=True):
+                for item in result["rule_based_details"]:
+                    st.markdown(f"- {item}")
+        if SHOW_DEBUG:
+            st.markdown("**Debug - current input/recommendation payload**")
+            st.json(result, expanded=False)
+        st.caption("Use this recommendation as decision support and validate with controlled experiments.")
+
+
+def render_model_level_visual_insights(pipeline) -> None:
+    st.markdown("## Model-Level Visual Insights")
+    with st.expander("Global Model Evaluation", expanded=False):
+        st.caption(
+            "These charts summarize the available model/sample evaluation artifacts and are not recalculated "
+            "for each individual prediction."
+        )
+
+        st.markdown("### Feature Importance")
         try:
-            importance_df, source = build_feature_importance_table(pipeline)
+            importance_df, _ = build_feature_importance_table(pipeline)
             top_df = importance_df.head(10)
             render_importance_bar(
                 top_df["feature"].tolist(),
                 top_df["importance"].to_numpy(),
                 top_n=10,
             )
-            if source == "exploratory":
-                st.info(
-                    "Exploratory fallback: this chart uses absolute correlation with printability "
-                    "for key numeric process parameters."
-                )
-            st.caption(
-                "Higher values indicate process parameters with greater influence on the model or "
-                "stronger exploratory relationship with printability in the available dataset."
-            )
         except Exception as exc:
-            st.warning(f"Feature importance chart is unavailable: {exc}")
+            st.caption(f"Feature importance chart is unavailable: {exc}")
 
-        st.write("---")
-        st.markdown("### Power x Velocity Success Map")
-        power_range = np.linspace(50, 500, 30)
-        vel_range = np.linspace(0.2, 3.0, 30)
-        grid = []
-        for p in power_range:
-            for v in vel_range:
-                row = X.copy()
-                row["Power [W]"] = p
-                row["Velocity [m/s]"] = v
-                grid.append(row.iloc[0])
+        metrics = None
+        if PATHS["metrics"].exists():
+            try:
+                metrics = json.loads(PATHS["metrics"].read_text(encoding="utf-8"))
+            except Exception:
+                metrics = None
 
-        df_grid = pd.DataFrame(grid)
-        probs = pipeline.predict_proba(df_grid)[:, 1]
-        df_grid["prob"] = probs
-        pivot = df_grid.pivot_table(index="Velocity [m/s]", columns="Power [W]", values="prob")
+        if metrics:
+            m1, m2, m3 = st.columns(3)
+            with m1:
+                st.metric("Accuracy", f"{metrics.get('accuracy', 'n/a')}")
+            with m2:
+                st.metric("Precision", f"{metrics.get('precision', 'n/a')}")
+            with m3:
+                st.metric("Recall", f"{metrics.get('recall', 'n/a')}")
 
-        fig, ax = plt.subplots(figsize=(9, 5))
-        image = ax.imshow(pivot, cmap="viridis", origin="lower", aspect="auto")
-        ax.set_title("Success Probability Across Power and Velocity")
-        ax.set_xlabel("Power [W]")
-        ax.set_ylabel("Velocity [m/s]")
-        cbar = plt.colorbar(image, ax=ax)
-        cbar.set_label("Success Probability")
-        st.pyplot(fig)
-
-
-def render_model_performance() -> None:
-    st.markdown("## Model Performance")
-    st.markdown(
-        "If available, the confusion matrix and ROC curve generated during model evaluation are shown below."
-    )
-    if PATHS["confusion_matrix"].exists():
-        st.image(str(PATHS["confusion_matrix"]), caption="Confusion Matrix", use_container_width=True)
-    else:
-        st.warning("Optional figure missing: `outputs/figures/confusion_matrix.png`")
-
-    if PATHS["roc_curve"].exists():
-        st.image(str(PATHS["roc_curve"]), caption="ROC Curve", use_container_width=True)
-    else:
-        st.warning("Optional figure missing: `outputs/figures/roc_curve.png`")
-
-    st.info(
-        "Validated scalar metrics are not embedded here. Export notebook metrics to "
-        "`outputs/metrics/model_metrics.json` to display them in-app."
-    )
+        charts = st.columns(2)
+        with charts[0]:
+            if PATHS["confusion_matrix"].exists():
+                st.image(
+                    str(PATHS["confusion_matrix"]),
+                    caption="Confusion Matrix",
+                    use_container_width=True,
+                    width=460,
+                )
+            else:
+                st.caption("Confusion matrix image is not available.")
+        with charts[1]:
+            if PATHS["roc_curve"].exists():
+                st.image(
+                    str(PATHS["roc_curve"]),
+                    caption="ROC Curve",
+                    use_container_width=True,
+                    width=460,
+                )
+            else:
+                st.caption("ROC curve image is not available.")
 
 
-def render_data_overview() -> None:
-    st.markdown("## Data Overview")
-    processed = load_optional_dataframe(PATHS["processed_data"], "processed dataset")
-    best = load_optional_dataframe(PATHS["best_combinations"], "best success combinations")
-    if processed is not None:
-        st.markdown("### Processed Data")
-        st.write(f"Rows: {processed.shape[0]} | Columns: {processed.shape[1]}")
-        st.dataframe(processed.head(20), use_container_width=True)
-    if best is not None:
-        st.markdown("### Best Success Combinations")
-        st.dataframe(best.head(20), use_container_width=True)
-
-
-def render_optimization_insights() -> None:
+def render_optimization_insights(advisor_result: dict) -> None:
     st.markdown("## Optimization Insights")
-    st.markdown(
-        """
-Key process parameters typically include:
-- **Power [W]**: higher values increase melt pool energy but may increase defects when excessive.
-- **Velocity [m/s]**: controls interaction time and energy deposition.
-- **Hatch Spacing [um]**: affects overlap and fusion consistency between scan tracks.
-- **Layer Thickness and Beam Diameter**: influence volumetric energy density and part quality.
+    insights = advisor_result["optimization_insights"]
 
-Use this app to prioritize candidate process windows, then validate shortlisted settings experimentally.
+    insight_1, insight_2, insight_3 = st.columns(3)
+    with insight_1:
+        st.success(f"**Power & Speed Balance**\n\n{insights['power_speed_balance']}")
+    with insight_2:
+        st.success(f"**Hatch Spacing & Layer Thickness**\n\n{insights['hatch_layer_balance']}")
+    with insight_3:
+        st.success(f"**Practical Recommendation**\n\n{insights['practical_recommendation']}")
+
+    with st.expander("Show recommendation logic", expanded=False):
+        st.markdown(
+            """
+- Increase success likelihood by operating within stable energy-density windows.
+- Reduce risk by avoiding extreme combinations of power and velocity.
+- Prioritize repeatable settings and validate in controlled lab prints.
 """
-    )
+        )
 
 
 def main() -> None:
     st.set_page_config(page_title="NorthStar - Process Advisor", layout="wide")
+    if "last_advisor_result" not in st.session_state:
+        st.session_state["last_advisor_result"] = None
+    if "last_prediction_signature" not in st.session_state:
+        st.session_state["last_prediction_signature"] = None
+    if "prediction_is_fresh" not in st.session_state:
+        st.session_state["prediction_is_fresh"] = False
+
     inject_theme()
     render_header()
-    st.write("---")
+    st.divider()
 
     pipeline = load_pipeline(PATHS["model"])
-    page = st.sidebar.radio(
-        "Navigate",
-        [
-            "Project Overview",
-            "Process Advisor",
-            "Model Performance",
-            "Data Overview",
-            "Optimization Insights",
-        ],
-    )
+    render_dataset_summary()
+    st.divider()
 
-    if page == "Project Overview":
-        render_project_overview()
-    elif page == "Process Advisor":
-        if pipeline is None:
-            st.warning(
-                "Process Advisor requires the trained model at `models/best_model_smote.pkl`."
-            )
-        else:
-            render_process_advisor(pipeline)
-    elif page == "Model Performance":
-        render_model_performance()
-    elif page == "Data Overview":
-        render_data_overview()
-    elif page == "Optimization Insights":
-        render_optimization_insights()
+    if pipeline is None:
+        st.warning("Process Advisor requires the trained model at `models/best_model_smote.pkl`.")
+    else:
+        render_process_advisor(pipeline)
+        has_fresh_prediction = bool(st.session_state.get("prediction_is_fresh"))
+        if has_fresh_prediction:
+            st.divider()
+            render_model_level_visual_insights(pipeline)
+            st.divider()
+            render_optimization_insights(st.session_state["last_advisor_result"])
 
 
 if __name__ == "__main__":
